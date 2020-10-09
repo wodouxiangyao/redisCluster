@@ -1,7 +1,7 @@
 
 ## Redis-cluster集群创建
 
-<div align=center>
+<div>
 <img src="https://img.shields.io/badge/go-1.15-lightBlue"/>
 <img src="https://img.shields.io/badge/redis-5.0.9-brightgreen"/>
 <img src="https://img.shields.io/badge/docker-1.18-red"/>
