@@ -62,9 +62,9 @@ func (p *CreateParams) verifyPorts() (bool, interface{}) {
 			return false, "		端口的个数不对"
 		}
 		/*判断是否有重复的*/
-		distinctMap := make(map[int64]interface{}, count)
+		distinctMap := make(map[int]interface{}, count)
 		for _, element := range split {
-			portInt, err := strconv.ParseInt(element, 10, 10)
+			portInt, err := strconv.Atoi(element)
 			if err != nil {
 				return false, "		端口不合法,请输入整数"
 			}

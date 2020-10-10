@@ -11,8 +11,6 @@ import (
 )
 
 const (
-	imageName      = "redis"
-	imageTag       = "cluster"
 	clusterCommand = "redis-cli --cluster create --cluster-replicas %d %s"
 )
 
@@ -67,8 +65,7 @@ func verifyParams(params *CreateParams) {
 func createImage() {
 
 	/*判断是否存在该镜像,存在则不删除*/
-	existImages := fmt.Sprintf("docker images|awk '$1==\"%s\" && $2==\"%s\" {print $1 $2}'|wc -l", imageName, imageTag)
-	output, err := exec.Command("/bin/sh", "-c", existImages).Output()
+	output, err := exec.Command("/bin/sh", "-c", IsExistImage).Output()
 	if err != nil {
 		log.Fatal("		查看镜像发生错误  ", err)
 	}
@@ -76,8 +73,7 @@ func createImage() {
 
 	if strings.TrimSpace(sprintf) == strconv.Itoa(0) {
 		log.Println("即将生成镜像...")
-		buildCommand := fmt.Sprintf("docker build --force-rm -q --no-cache -t %s:%s -f %s %s", imageName, imageTag, tempDir+"resources/Dockerfile", tempDir+"resources/")
-		err := exec.Command("/bin/sh", "-c", buildCommand).Run()
+		err := exec.Command("/bin/sh", "-c", buildImageString()).Run()
 		if err != nil {
 			log.Fatal("		创建镜像发生错误  ", err)
 		}
@@ -90,64 +86,27 @@ func createImage() {
 
 func runContainer(params *CreateParams) {
 	/*判断是否存在容器，存在就删除*/
-	existContainer := "docker ps -a | awk '$NF ~ \"redis.+\" {print $NF}'|wc -l"
-	output, err := exec.Command("/bin/sh", "-c", existContainer).Output()
+	output, err := exec.Command("/bin/sh", "-c", IsExistContainer).Output()
 	if err != nil {
 		log.Fatal("		查看容器列表发生错误  ", err)
 	}
-	sprintf := fmt.Sprintf("%s", output)
+
 	/*存在则全部删除*/
-	if strings.TrimSpace(sprintf) != strconv.Itoa(0) {
-		output, _ := exec.Command("/bin/sh", "-c", "docker ps -a | awk '$NF ~ \"redis.+\" {print $NF}'").Output()
-		sprintf = fmt.Sprintf("%s", output)
-		split := strings.Split(sprintf, "\n")
-		var containers strings.Builder
-		containers.WriteString("docker rm -f ")
-		containers.WriteString(strings.Join(split, " "))
-		output, err := exec.Command("/bin/sh", "-c", containers.String()).Output()
+	if strings.TrimSpace(string(output)) != strconv.Itoa(0) {
+		output, _ := exec.Command("/bin/sh", "-c", IsExistContainer).Output()
+
+		/*将命令的结果转换为以空格分隔的一行字符串*/
+		allContainerWithSpace := strings.ReplaceAll(string(output), "\n", " ")
+		output, err := exec.Command("/bin/sh", "-c", rmContainerString(allContainerWithSpace)).Output()
 		if err != nil {
 			log.Fatal("删除容器发生错误  ", err)
 		}
-		log.Printf("删除容器:   %s\n", strings.Join(strings.Split(fmt.Sprintf("%s", output), "\n"), "\n\t\t\t\t"))
+
+		log.Printf("删除容器:   %s\n", strings.ReplaceAll(string(output), "\n", "\n\t\t\t\t"))
 	}
 	/*创建容器*/
-	containerCount := params.master * (params.replicas + 1)
-	var createContainer strings.Builder
 
-	split := strings.Split(params.ports, ",")
-
-	/*创建集群副本的所有主机IP端口*/
-	allHostStr := make([]string, containerCount)
-
-	for i := 0; i < containerCount; i++ {
-		createContainer.WriteString("docker run -itd --name redis")
-		createContainer.WriteString(strconv.Itoa(i + 1))
-		createContainer.WriteString(" -h redis")
-		createContainer.WriteString(strconv.Itoa(i + 1))
-		createContainer.WriteString(" --network ")
-		createContainer.WriteString(redisClusterNetwork)
-		createContainer.WriteString(" --ip 172.30.188.")
-
-		allHostStr[i] = "172.30.188." + strconv.Itoa(100+i+1) + ":6379"
-		createContainer.WriteString(strconv.Itoa(100 + i + 1)) //容器的IP從100開始
-		createContainer.WriteString(" -p ")
-		createContainer.WriteString(split[i])
-		createContainer.WriteString(":6379")
-		createContainer.WriteString(" -p 1")
-		createContainer.WriteString(split[i])
-		createContainer.WriteString(":16379")
-		createContainer.WriteString(" -e redisPort=")
-		createContainer.WriteString(split[i])
-		createContainer.WriteString(" -e redisHost=")
-		createContainer.WriteString(params.host)
-		createContainer.WriteString(" ")
-		createContainer.WriteString(imageName)
-		createContainer.WriteString(":")
-		createContainer.WriteString(imageTag)
-		if i < containerCount-1 {
-			createContainer.WriteString("   && ")
-		}
-	}
+	createContainer, allHostStr := getCreateContainerString(*params)
 
 	command := exec.Command("/bin/sh", "-c", createContainer.String())
 	command.Wait()
@@ -157,11 +116,12 @@ func runContainer(params *CreateParams) {
 		log.Fatal("创建容器发生错误  ", err)
 	}
 
-	log.Printf(`创建容器:   %s`, strings.Join(strings.Split(fmt.Sprintf("%s", output), "\n"), "\n\t\t\t\t"))
+	log.Printf(`创建容器:   %s`, strings.ReplaceAll(string(output), "\n", "\n\t\t\t\t"))
 
 	createCluster(params.replicas, strings.Join(allHostStr, " "))
 
 	createContainer.Reset()
+	split := strings.Split(params.ports, ",")
 	for i := 0; i < params.master; i++ {
 		createContainer.WriteString(params.host)
 		createContainer.WriteString(":")
@@ -184,7 +144,6 @@ func createCluster(replicas int, allHost string) {
 			}"`, redisCliComm)
 	commStr := fmt.Sprintf("docker exec redis1 %s", interactionComm)
 
-	//_, err := exec.Command("/bin/sh", "-c", commStr).Output()
 	err := exec.Command("/bin/sh", "-c", commStr).Run()
 
 	if err != nil {
