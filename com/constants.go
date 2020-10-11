@@ -1,6 +1,7 @@
 package com
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -20,7 +21,8 @@ const (
 )
 
 const (
-	IsExistContainer = "docker ps -a | awk '$NF ~ \"redis.+\" {print $NF}'|wc -l"
+	IsExistContainer     = "docker ps -a | awk '$NF ~ \"redis.+\" {print $NF}'|wc -l"
+	ClusterContainerName = "docker ps -a | awk '$NF ~ \"redis.+\" {print $NF}'"
 )
 
 /*获取构建镜像的命令*/
@@ -39,43 +41,24 @@ func rmContainerString(containers string) string {
 /**
 
  */
-func getCreateContainerString(params CreateParams) (createString strings.Builder, allHostStr []string) {
+func getCreateContainerString(params CreateParams) (createContainerBuilder strings.Builder, allHostStr []string) {
 	count := params.master * (params.replicas + 1)
 
-	var createContainer strings.Builder
 	split := strings.Split(params.ports, ",")
 
 	/*创建集群副本的所有主机IP端口*/
 	allHostStr = make([]string, count)
 
 	for i := 0; i < count; i++ {
-		createContainer.WriteString("docker run -itd --name redis")
-		createContainer.WriteString(strconv.Itoa(i + 1))
-		createContainer.WriteString(" -h redis")
-		createContainer.WriteString(strconv.Itoa(i + 1))
-		createContainer.WriteString(" --network ")
-		createContainer.WriteString(NetName)
-		createContainer.WriteString(" --ip 172.30.188.")
+		sprintf := fmt.Sprintf("docker run -itd --name redis%d -h redis%d  --network %s --ip 172.30.188.%d -p %s:6379 -p 1%s:16379 -e redisPort=%s  -e redisHost=%s %s:%s",
+			i+1, i+1, NetName, 101+i, split[i], split[i], split[i], params.host, ImageName, ImageTag)
 
-		allHostStr[i] = "172.30.188." + strconv.Itoa(100+i+1) + ":6379"
-		createContainer.WriteString(strconv.Itoa(100 + i + 1)) //容器的IP從100開始
-		createContainer.WriteString(" -p ")
-		createContainer.WriteString(split[i])
-		createContainer.WriteString(":6379")
-		createContainer.WriteString(" -p 1")
-		createContainer.WriteString(split[i])
-		createContainer.WriteString(":16379")
-		createContainer.WriteString(" -e redisPort=")
-		createContainer.WriteString(split[i])
-		createContainer.WriteString(" -e redisHost=")
-		createContainer.WriteString(params.host)
-		createContainer.WriteString(" ")
-		createContainer.WriteString(ImageName)
-		createContainer.WriteString(":")
-		createContainer.WriteString(ImageTag)
+		createContainerBuilder.WriteString(sprintf)
+
 		if i < count-1 {
-			createContainer.WriteString("   && ")
+			createContainerBuilder.WriteString("   && ")
 		}
+		allHostStr[i] = "172.30.188." + strconv.Itoa(101+i) + ":6379"
 	}
-	return createContainer, allHostStr
+	return
 }

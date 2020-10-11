@@ -93,11 +93,11 @@ func runContainer(params *CreateParams) {
 
 	/*存在则全部删除*/
 	if strings.TrimSpace(string(output)) != strconv.Itoa(0) {
-		output, _ := exec.Command("/bin/sh", "-c", IsExistContainer).Output()
+		output, _ := exec.Command("/bin/sh", "-c", ClusterContainerName).Output()
 
 		/*将命令的结果转换为以空格分隔的一行字符串*/
 		allContainerWithSpace := strings.ReplaceAll(string(output), "\n", " ")
-		output, err := exec.Command("/bin/sh", "-c", rmContainerString(allContainerWithSpace)).Output()
+		_, err := exec.Command("/bin/sh", "-c", rmContainerString(allContainerWithSpace)).Output()
 		if err != nil {
 			log.Fatal("删除容器发生错误  ", err)
 		}
@@ -108,6 +108,7 @@ func runContainer(params *CreateParams) {
 
 	createContainer, allHostStr := getCreateContainerString(*params)
 
+	log.Println(createContainer.String())
 	command := exec.Command("/bin/sh", "-c", createContainer.String())
 	command.Wait()
 
@@ -143,7 +144,7 @@ func createCluster(replicas int, allHost string) {
 					\"(type 'yes' to accept):\" {send \"yes\r\";exp_continue;}
 			}"`, redisCliComm)
 	commStr := fmt.Sprintf("docker exec redis1 %s", interactionComm)
-
+	log.Println(commStr)
 	err := exec.Command("/bin/sh", "-c", commStr).Run()
 
 	if err != nil {
